@@ -15,10 +15,10 @@ package org.web3j.solidity.gradle.plugin
 import groovy.transform.CompileStatic
 import org.gradle.api.Action
 import org.gradle.api.file.SourceDirectorySet
-import org.gradle.api.internal.file.SourceDirectorySetFactory
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.reflect.HasPublicType
 import org.gradle.api.reflect.TypeOf
-import org.gradle.util.ConfigureUtil
+import org.gradle.util.internal.ConfigureUtil
 
 /**
  * SoliditySourceSet default implementation.
@@ -28,14 +28,16 @@ class DefaultSoliditySourceSet implements SoliditySourceSet, HasPublicType {
 
     private final SourceDirectorySet solidity
     private final SourceDirectorySet allSolidity
+    private final ObjectFactory objectFactory
 
     DefaultSoliditySourceSet(
             final String displayName,
-            final SourceDirectorySetFactory setFactory) {
+            final ObjectFactory objectFactory) {
 
-        solidity = setFactory.create(NAME, displayName + " Solidity Sources")
+        this.objectFactory = objectFactory
+        solidity = objectFactory.sourceDirectorySet(NAME, displayName + " Solidity Sources")
         solidity.getFilter().include("**/*.sol")
-        allSolidity = setFactory.create(displayName + " Solidity Sources")
+        allSolidity = objectFactory.sourceDirectorySet("all", displayName + " Solidity Sources")
         allSolidity.getFilter().include("**/*.sol")
         allSolidity.source(solidity)
     }

@@ -17,9 +17,9 @@ import com.github.gradle.node.NodePlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.internal.file.SourceDirectorySetFactory
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPlugin
-import org.gradle.api.plugins.JavaPluginConvention
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 
@@ -33,13 +33,13 @@ import static org.web3j.solidity.gradle.plugin.SoliditySourceSet.NAME
  */
 class SolidityPlugin implements Plugin<Project> {
 
-    private final SourceDirectorySetFactory sourceFactory
     private final SoliditySourceSet resolvedSolidity
+    private final ObjectFactory objectFactory
 
     @Inject
-    SolidityPlugin(final SourceDirectorySetFactory sourceFactory) {
-        this.sourceFactory = sourceFactory
-        this.resolvedSolidity = new DefaultSoliditySourceSet("All", sourceFactory)
+    SolidityPlugin(final ObjectFactory objectFactory) {
+        this.objectFactory = objectFactory
+        this.resolvedSolidity = new DefaultSoliditySourceSet("All", objectFactory)
     }
 
     @Override
@@ -49,8 +49,8 @@ class SolidityPlugin implements Plugin<Project> {
         target.extensions.create(SolidityExtension.NAME,
                 SolidityExtension, target)
 
-        final SourceSetContainer sourceSets = target.convention
-                .getPlugin(JavaPluginConvention.class).sourceSets
+        final SourceSetContainer sourceSets = target.getExtensions()
+                .getByType(JavaPluginExtension.class).sourceSets
 
         sourceSets.all { SourceSet sourceSet ->
             configureSourceSet(target, sourceSet)
@@ -78,7 +78,7 @@ class SolidityPlugin implements Plugin<Project> {
     private void configureSourceSet(final Project project, final SourceSet sourceSet) {
 
         def srcSetName = capitalize((CharSequence) sourceSet.name)
-        def soliditySourceSet = new DefaultSoliditySourceSet(srcSetName, sourceFactory)
+        def soliditySourceSet = new DefaultSoliditySourceSet(srcSetName, objectFactory)
 
         sourceSet.convention.plugins.put(NAME, soliditySourceSet)
 
@@ -86,7 +86,7 @@ class SolidityPlugin implements Plugin<Project> {
         def defaultOutputDir = new File(project.buildDir, "resources/$sourceSet.name/$NAME")
 
         soliditySourceSet.solidity.srcDir(defaultSrcDir)
-        soliditySourceSet.solidity.outputDir = defaultOutputDir
+        soliditySourceSet.solidity.destinationDirectory.set(defaultOutputDir)
 
         sourceSet.allJava.source(soliditySourceSet.solidity)
         sourceSet.allSource.source(soliditySourceSet.solidity)
@@ -122,17 +122,20 @@ class SolidityPlugin implements Plugin<Project> {
         compileTask.evmVersion = project.solidity.evmVersion
         compileTask.allowPaths = project.solidity.allowPaths
         compileTask.ignoreMissing = project.solidity.ignoreMissing
-        compileTask.outputs.dir(soliditySourceSet.solidity.outputDir)
+
+        compileTask.outputs.dir(soliditySourceSet.solidity.destinationDirectory.asFile.get())
         compileTask.description = "Compiles $sourceSet.name Solidity source."
 
+        project.tasks.findByName("jar").configure { dependsOn("compileSolidity") }
+
         if (project.solidity.resolvePackages) {
-            project.getTasks().named('npmInstall').configure {
+            project.tasks.named('npmInstall').configure {
                 it.dependsOn(project.getTasks().named("resolveSolidity"))
             }
             compileTask.dependsOn(project.getTasks().named("npmInstall"))
         }
 
-        project.getTasks().named('build').configure {
+        project.tasks.named('build').configure {
             it.dependsOn(compileTask)
         }
     }
